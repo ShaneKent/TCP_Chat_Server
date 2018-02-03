@@ -46,60 +46,89 @@ void run (uint32_t server_socket) {
    
    struct server_info server;
    server.server_socket = server_socket;
-   server.number_clients
-   //fd_set rfds;
+   server.clients = NULL;
 
-   uint8_t buf[MAXBUF];
-
-   uint32_t num_fds = 1;
-   uint32_t * fds = (uint32_t *) malloc( sizeof(uint32_t) * num_fds );
-
-   fds[0] = server_socket;
+   struct client_ptr * temp_client;
 
    while (1) {
       
-      set_and_select_file_descriptors(&rfds, fds, num_fds);
-      
-      if (FD_ISSET(server_socket, &rfds)) {
-         uint32_t client_socket;
-         client_socket = tcpAccept(server_socket, 0);
-         
-         printf("Client connected on socket: %d\n", client_socket);
+      set_and_select_file_descriptors(&server);
 
-         num_fds += 1;
-         fds = (uint32_t *) realloc(fds, sizeof(uint32_t) * num_fds );
-         fds[num_fds - 1] = client_socket;
+      if (FD_ISSET(server.server_socket, &server.rfds)) {
+         new_client_connected(&server);
       }
 
-      int i;
-      for (i = 1; i < num_fds; i++) {
+      temp_client = server.clients;
 
-         parse_client_message(fds[i], buf, &rfds, fds, &num_fds);
-         
+      while (temp_client != NULL) {             // loop through clients.
+         client_ready(&server, temp_client);
+         temp_client = temp_client->next_client;
       }
 
    }
 }
 
-void set_and_select_file_descriptors (fd_set * rfds, uint32_t fds[], uint32_t num_fds) {
+void set_and_select_file_descriptors (struct server_info * server) {
    
-   int i;
-   uint32_t max_fd = 0;
+   uint32_t max_fd;
    struct timeval tv;
+   struct client_ptr * current_client = server->clients;
+   
+   FD_ZERO(&server->rfds);
+   FD_SET(server->server_socket, &server->rfds);
+   max_fd = server->server_socket;
 
-   tv.tv_sec = 1;
-   tv.tv_usec = 0;
-   FD_ZERO(rfds);
+   while (current_client != NULL) {
 
-   for (i = 0; i < num_fds; i++) {
-      FD_SET(fds[i], rfds);
-      if (fds[i] > max_fd) {
-         max_fd = fds[i];
-      }
+      FD_SET(current_client->client_socket, &server->rfds);
+
+      if (current_client->client_socket > max_fd)
+         max_fd = current_client->client_socket;
+
+      current_client = current_client->next_client;
    }
+   
+   tv.tv_sec = 0;
+   tv.tv_usec = 500000;
 
-   select(max_fd + 1, (fd_set *) rfds, (fd_set *) 0, (fd_set *) 0, &tv);
+   select(max_fd + 1, (fd_set *) &server->rfds, (fd_set *) 0, (fd_set *) 0, &tv);
+
 }
+
+void new_client_connected (struct server_info * server) {
+   
+   struct client_ptr * new_client;
+   struct client_ptr * temp_client;
+
+   server->number_clients += 1;     // increment num of clients stored
+
+   new_client = (struct client_ptr *) malloc(sizeof(struct client_ptr));
+   new_client->client_socket = tcpAccept(server->server_socket, 0);
+   *new_client->client_handle = '\0'; // initialize handle as NULL
+   new_client->next_client = NULL;
+   
+   if (server->clients == NULL) {
+      server->clients = new_client; // no stored clients
+   } else {
+      temp_client = server->clients;       
+
+      while (temp_client != NULL)   // get to the end of the client list
+         temp_client = temp_client->next_client; 
+
+      temp_client->next_client = new_client; // add new client
+
+   }
+   
+   printf("New client connected on socket %d\n", new_client->client_socket);
+
+   return;
+}
+
+void client_ready (struct server_info * server, struct client_ptr * client) {
+   printf("Client ready: %d\n", client->client_socket);
+}
+
+
 
 void parse_client_message(uint32_t client_socket, uint8_t buf[], fd_set * rfds, uint32_t * fds, uint32_t * num_fds) {
 

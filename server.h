@@ -2,14 +2,6 @@
 
 #define SERVER
 
-int main (int argc, char * argv[]);
-int check_arguments (int argc, char * argv[]);
-
-void run (uint32_t server_socket);
-void set_and_select_file_descriptors (fd_set * rfds, uint32_t fds[], uint32_t num_fds);
-
-void parse_client_message(uint32_t client_socket, uint8_t buf[], fd_set * rfds, uint32_t * fds, uint32_t * num_fds);
-
 struct server_info {
    fd_set rfds;
    uint32_t server_socket;
@@ -23,7 +15,19 @@ struct client_ptr {
    struct client_ptr * next_client; // points to the next client.
 };
 
-/*
+int main (int argc, char * argv[]);
+int check_arguments (int argc, char * argv[]);
+
+void run (uint32_t server_socket);
+void set_and_select_file_descriptors (struct server_info * server);
+
+void new_client_connected (struct server_info * server);
+void client_ready (struct server_info * server, struct client_ptr * client);
+
+void parse_client_message(uint32_t client_socket, uint8_t buf[], fd_set * rfds, uint32_t * fds, uint32_t * num_fds);
+
+
+
 struct chat_header {
    uint16_t packet_len;
    uint8_t  flag;
@@ -34,5 +38,5 @@ struct handle_info {
    uint8_t handle_len;
    uint8_t * handle;
 } __attribute__((packed));
-*/
+
 #endif
