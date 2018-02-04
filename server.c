@@ -120,7 +120,7 @@ void new_client_connected (struct server_info * server) {
 
    }
    
-   printf("New client connected on socket %d\n", new_client->client_socket);
+   //printf("New client connected on socket %d\n", new_client->client_socket);
 
    return;
 }
@@ -198,6 +198,8 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
          flag_one(server, client, ptr);
       } else if (c_hdr->flag == 5) {
          flag_five(server, client, ptr);
+      } else if (c_hdr->flag == 8) {
+         flag_eight(server, client, ptr);
       }
       
       ptr += ntohs(c_hdr->packet_len);
@@ -260,7 +262,7 @@ void good_handle (struct server_info * server, struct client_ptr * client) {
 
 void flag_five(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
   
-   struct chat_header * c_hdr = (struct chat_header *) buf;
+   //struct chat_header * c_hdr = (struct chat_header *) buf;
    uint16_t curr_pos = 3;
    
    uint8_t sender_handle[100] = {0};   // max string length.
@@ -287,8 +289,6 @@ void flag_five(struct server_info * server, struct client_ptr * client, uint8_t 
       memset( &dest_handle, '\0', 100 );
       memcpy( &dest_handle, buf + curr_pos, dest_len);
       curr_pos += dest_len;
-
-      //printf("\tNumber Dest: %d\n\t\tDest Len: %d\n\t\tDest Handle: %s\n", number_dest, dest_len, dest_handle); 
 
       if ( handle_exists( server, dest_handle ) != 0) {
          //printf("Handle doesn't exist.\n");
@@ -349,6 +349,17 @@ uint32_t get_socket_of_handle (struct server_info * server, uint8_t dest_handle[
    }
 
    return -1;
+
+}
+
+void flag_eight(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
+   
+   struct chat_header c_hdr[3];
+
+   c_hdr->packet_len = htons(3);
+   c_hdr->flag = 9;
+
+   wrapped_send(client->client_socket, c_hdr, 3, 0);
 
 }
 

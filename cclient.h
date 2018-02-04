@@ -6,6 +6,13 @@ struct client_info {
    fd_set rfds;
    uint32_t server_socket;
    uint8_t handle[100];
+   uint8_t number_blocked;
+   struct blocked_client * blocked;
+};
+
+struct blocked_client {
+   uint8_t client_handle[100];
+   struct blocked_client * next_blocked;
 };
 
 struct chat_header {
@@ -27,9 +34,17 @@ void check_recv_len(uint32_t socket, uint32_t len);
 
 void flag_5(uint8_t packet[]);
 void flag_7(uint8_t packet[]);
+void flag_9(struct client_info * client);
 
 void parse_stdin(struct client_info * client);
 void parse_m_command(struct client_info * client);
 void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint32_t socket_number);
+
+void list_blocked_clients(struct client_info * client);
+void block_client(struct client_info * client, char * tok);
+void unblock_client(struct client_info * client, char * tok);
+uint8_t check_if_blocked (struct client_info * client, char * handle);
+
+void send_exit_request(struct client_info * client);
 
 #endif

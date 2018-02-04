@@ -54,6 +54,7 @@ void return_bad_handle (struct server_info * server, struct client_ptr * client,
 void forward_message (struct server_info * server, uint8_t buf[], uint8_t dest_handle[]);
 uint32_t get_socket_of_handle (struct server_info * server, uint8_t dest_handle[]);
 
+void flag_eight(struct server_info * server, struct client_ptr * client, uint8_t buf[]);
 
 uint8_t handle_exists (struct server_info * server, uint8_t handle[]);
 void print_all_clients(struct server_info * server);
