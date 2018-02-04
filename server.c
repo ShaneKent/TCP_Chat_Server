@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/select.h>
@@ -181,56 +182,85 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
       return;
    }
 
+   printf("Received: ");
    print_buffer(buf, len);
 
    c_hdr = (struct chat_header *) buf;
    
    if (c_hdr->flag == 1) {
-      printf("Flag 1\n");
-      
+
+      flag_one(server, client, buf);
+
    }
 
+   //print_all_clients(server);
+
+}
+
+void flag_one (struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
+   
+   struct client_ptr * temp;
+   struct initialize_packet * init_packet = (struct initialize_packet *) buf;
+   uint8_t sender_handle[100] = {0};   // max string length.
+
+   memcpy( &sender_handle, &init_packet->sender_handle_len + 1, init_packet->sender_handle_len );
+   //printf("%s\n", sender_handle);
+
+   // Let's check to see if the handle has been used.
+   temp = server->clients;
+   while (temp != NULL) {
+      //printf("String 1: %s\nString 2: %s\n", sender_handle, temp->client_handle);
+      if (strcmp( (char *) &sender_handle, (char *) &temp->client_handle) == 0) {
+         bad_handle(server, client);
+         return;
+      }
+      temp = temp->next_client;
+   }
+   
+   // I wanted to put this inside 'good_handle', but I was having trouble doing that..
+   strcpy( (char *) client->client_handle, (char *) sender_handle);
+
+   good_handle(server, client);
+}
+
+void bad_handle (struct server_info * server, struct client_ptr * client) {
+   
+   struct chat_header c_hdr[3];
+   
+   c_hdr->packet_len = htons(3);
+   c_hdr->flag = 3;
+
+   wrapped_send(client->client_socket, c_hdr, 3, 0);
+   
+   delete_client(server, client);
+}
+
+void good_handle (struct server_info * server, struct client_ptr * client) {
+   
+   struct chat_header c_hdr[3];
+
+   c_hdr->packet_len = htons(3);
+   c_hdr->flag = 2;
+
+   wrapped_send(client->client_socket, c_hdr, 3, 0);
 }
 
 
 
-void parse_client_message(uint32_t client_socket, uint8_t buf[], fd_set * rfds, uint32_t * fds, uint32_t * num_fds) {
 
-   int len;
-   uint8_t * ptr = buf;
-   struct chat_header * hdr;
 
-   if (FD_ISSET(client_socket, rfds)) {
-      len = recv(client_socket, ptr, MAXBUF, MSG_DONTWAIT);
-      
-      hdr = (struct chat_header *) ptr;
+void print_all_clients (struct server_info * server) {
 
-      if (hdr->flag == 1) {
-         printf("initialize\n");
+   struct client_ptr * c = server->clients;
 
-      }
-      
-      int i;
-      for (i = 0; i < len; i++)
-         printf("%02x ", ptr[i]);
-      printf("\n");
-      fflush(stdout);
+   printf("\n-----\nServer Info:\n\tServer Socket: %d\tNumber Clients: %d\n", server->server_socket, server->number_clients);
 
-      printf("\tlength: %d, flags: %d\n", hdr->packet_len, hdr->flag);
-
-      if (len == 0) {   // client closed forcefully.
-         close(client_socket);
-         remove_element(fds, *num_fds, client_socket);
-         *num_fds -= 1;
-         
-         printf("Client %d closed - number sockets: %d\n", client_socket, *num_fds);
-      }
+   while (c != NULL) {
+      printf("\tClient Info:\n\t\tClient Socket: %d\n\t\tClient Handle: %s\n", c->client_socket, c->client_handle);
+      c = c->next_client;
    }
+   
+   printf("-----\n\n");
 
 }
-
-
-
-
-
 

@@ -15,9 +15,16 @@ struct client_ptr {
    struct client_ptr * next_client; // points to the next client.
 };
 
+// basing this format after the structures I used for prgm1.
 struct chat_header {
    uint16_t packet_len;
    uint8_t  flag;
+} __attribute__((packed));
+
+struct initialize_packet {
+   struct chat_header c_hdr;
+   uint8_t sender_handle_len;
+   uint8_t * sender_handle;//[100];
 } __attribute__((packed));
 
 int main (int argc, char * argv[]);
@@ -30,12 +37,17 @@ void new_client_connected (struct server_info * server);
 void delete_client (struct server_info * server, struct client_ptr * client);
 void client_ready (struct server_info * server, struct client_ptr * client);
 
-void parse_client_message(uint32_t client_socket, uint8_t buf[], fd_set * rfds, uint32_t * fds, uint32_t * num_fds);
+void flag_one (struct server_info * server, struct client_ptr * client, uint8_t buf[]);
+void bad_handle (struct server_info * server, struct client_ptr * client);
+void good_handle (struct server_info * server, struct client_ptr * client);
+
 
 struct handle_info {
    uint32_t socket_num;
    uint8_t handle_len;
    uint8_t * handle;
 } __attribute__((packed));
+
+void print_all_clients(struct server_info * server);
 
 #endif

@@ -48,17 +48,18 @@ void check_arguments(int argc, char * argv[]) {
 void run (char * handle, uint32_t socket_number) {
 
    struct client_info client;
-   client.server_socket = sociket_number;
-   strcpy( (char *) client.handle, handle);
+   client_info.client_socket = socket_number;
+   strcpy( (char *) client_info.handle, handle);
    
-   /*fd_set rfds;
+   printf("%s\n", handle);
+
+   fd_set rfds;
    uint8_t buf[MAXBUF];
   
    uint32_t num_fds = 2;
    uint32_t fds[2] = { STDIN_FILENO, socket_number };
-   initiate_good_bad_handle(buf, handle, socket_number);*/
 
-   initiate_good_bad_handle(&client);
+   initiate_good_bad_handle(buf, handle, socket_number);
 
    while (1) {
 
@@ -92,7 +93,7 @@ void run (char * handle, uint32_t socket_number) {
    }
 
 }
-/*
+
 void initiate_good_bad_handle(uint8_t buf[], char * handle, uint32_t socket_number) {
    
    uint32_t len;
@@ -123,11 +124,6 @@ void initiate_good_bad_handle(uint8_t buf[], char * handle, uint32_t socket_numb
    
    printf("$: ");
    fflush(stdout);
-}
-*/
-
-void initiate_good_bad_handle(struct client_info * client) {
-
 }
 
 void initialize_packet(uint8_t buf[], char * handle, uint32_t socket_number) {
