@@ -27,6 +27,13 @@ struct initialize_packet {
    uint8_t * sender_handle;//[100];
 } __attribute__((packed));
 
+struct msg_packet {
+   struct chat_header c_hdr;
+   uint8_t send_handle_len;
+   uint8_t * sender_handle;
+   uint8_t number_dest;
+} __attribute__((packed));
+
 int main (int argc, char * argv[]);
 int check_arguments (int argc, char * argv[]);
 
@@ -41,13 +48,9 @@ void flag_one (struct server_info * server, struct client_ptr * client, uint8_t 
 void bad_handle (struct server_info * server, struct client_ptr * client);
 void good_handle (struct server_info * server, struct client_ptr * client);
 
+void flag_five (struct server_info * server, struct client_ptr * client, uint8_t buf[]);
 
-struct handle_info {
-   uint32_t socket_num;
-   uint8_t handle_len;
-   uint8_t * handle;
-} __attribute__((packed));
-
+uint8_t handle_exists (struct server_info * server, uint8_t handle[]);
 void print_all_clients(struct server_info * server);
 
 #endif

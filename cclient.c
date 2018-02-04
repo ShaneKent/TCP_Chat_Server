@@ -188,31 +188,6 @@ void message_ready (struct client_info * client) {
     
 }
 
-/*void parse_stdin(uint8_t buf[], char * handle, uint32_t socket_number) {
-
-   char * tok;
-
-   fgets((char *) buf, MAXBUF, stdin);
-   
-   tok = strtok((char *) buf, " ");
-
-   if ( strcmp(tok, "%M") == 0 || strcmp(tok, "%m") == 0) {
-      parse_m_command(handle, socket_number);
-   } else if (strcmp(tok, "%B") == 0 || strcmp(tok, "%b") == 0) {
-      printf("B command.\n");
-   } else if (strcmp(tok, "%U") == 0 || strcmp(tok, "%u") == 0) {
-      printf("U command.\n");
-   } else if (strcmp(tok, "%L") == 0 || strcmp(tok, "%l") == 0) {
-      printf("L command.\n");
-   } else if (strcmp(tok, "%E") == 0 || strcmp(tok, "%e") == 0) {
-      printf("E command.\n");
-   } else {
-      printf("Invalid command\n");
-   }
-
-
-}*/
-
 void parse_stdin(struct client_info * client) {
    
    char * tok;
@@ -223,8 +198,8 @@ void parse_stdin(struct client_info * client) {
    tok = strtok( (char *) buf, " ");
    
    if ( strcmp(tok, "%M") == 0 || strcmp(tok, "%m") == 0) {
-      //parse_m_command(handle, socket_number);
-      printf("M command.\n");
+      parse_m_command(client);
+      //printf("M command.\n");
    } else if (strcmp(tok, "%B\n") == 0 || strcmp(tok, "%b\n") == 0) {
       printf("B list command.\n");
    } else if (strcmp(tok, "%B") == 0 || strcmp(tok, "%b") == 0) {
@@ -242,7 +217,7 @@ void parse_stdin(struct client_info * client) {
 
 }
 
-void parse_m_command (char * handle, uint32_t socket_number) {
+void parse_m_command (struct client_info * client) { //char * handle, uint32_t socket_number) {
 
    uint8_t handle_len;
    uint16_t packet_len = 3;               // chat header length
@@ -253,7 +228,7 @@ void parse_m_command (char * handle, uint32_t socket_number) {
    memset(packet, 0, MAXBUF);
 
    packet[2] = 5;
-   handle_len = pack_handle(packet, packet_len, handle);
+   handle_len = pack_handle(packet, packet_len, (char *) client->handle);
    packet_len += 1 + handle_len;          // handle len and len byte.
 
    
@@ -290,10 +265,12 @@ void parse_m_command (char * handle, uint32_t socket_number) {
    }
    
    tok = strtok(NULL, "\n");
-   if (tok == '\0')
-      pack_text_and_send(packet, packet_len, "\n", socket_number);
+   if (tok == NULL || tok == 0x00) {
+      tok = "\n";
+      pack_text_and_send(packet, packet_len, tok, client->server_socket);
+   }
 
-   pack_text_and_send(packet, packet_len, tok, socket_number);
+   pack_text_and_send(packet, packet_len, tok, client->server_socket);
    
 }
 
@@ -307,7 +284,7 @@ void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint3
    
    if (text_len % 200 == 0) num_packets -= 1;
 
-   printf("num packets: %d\n", num_packets);
+   //printf("num packets: %d\n", num_packets);
 
    for (p = 0; p < num_packets; p++) {
       memset(text, 0, sizeof(uint8_t));
@@ -317,12 +294,12 @@ void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint3
 
       packed_len = pack_handle(packet, packet_len, (char *) text);
       
-      packet[0] = htons(packet_len + packed_len) >> 8;
-      packet[1] = htons(packet_len + packed_len);
+      packet[0] = htons(packet_len + packed_len);
+      packet[1] = htons(packet_len + packed_len) >> 8;
       
       wrapped_send(socket_number, packet, packet_len + packed_len, 0);
    
-      printf("p: %d, len: %d\n", p, packet_len + packed_len);
+      //printf("p: %d, len: %d\n", p, packet_len + packed_len);
    }
 
 }

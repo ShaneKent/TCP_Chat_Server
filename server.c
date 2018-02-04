@@ -171,6 +171,7 @@ void delete_client(struct server_info * server, struct client_ptr * client) {
 void client_ready (struct server_info * server, struct client_ptr * client) {
    
    uint8_t buf[MAXBUF];
+   uint8_t * ptr;
    struct chat_header * c_hdr;
    uint32_t len = recv(client->client_socket, buf, MAXBUF, 0);
    
@@ -181,40 +182,56 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
       delete_client(server, client);
       return;
    }
-
-   printf("Received: ");
-   print_buffer(buf, len);
-
-   c_hdr = (struct chat_header *) buf;
    
-   if (c_hdr->flag == 1) {
+   ptr = (uint8_t *) buf;
 
-      flag_one(server, client, buf);
+   int i = 0;
+   while (len > 0) {
+      
+      c_hdr = (struct chat_header *) ptr;
+      printf("%d\n", i);
+      printf("c_hdr packet len: %d\n", ntohs(c_hdr->packet_len));
+      printf("len: %d\n", len);
 
+      // This is the case where the length of the next packet is greater than the data currently received.
+      if (len < ntohs(c_hdr->packet_len)) {
+         uint32_t temp = len;
+         len += recv(client->client_socket, ptr + temp, MAXBUF, 0);
+
+         if (len < 0) {
+            perror("recv call"); exit(EXIT_FAILURE);
+         } else if (len == 0) { // Time to close a client.
+            delete_client(server, client); return;
+         }
+         printf("\t%d\n", i);
+         printf("\tc_hdr packet len: %d\n", ntohs(c_hdr->packet_len));
+         printf("\tlen: %d\n", len);
+      }
+
+      if (c_hdr->flag == 1) {
+         flag_one(server, client, ptr);
+      } else if (c_hdr->flag == 5) {
+         flag_five(server, client, ptr);
+      }
+      
+      ptr += ntohs(c_hdr->packet_len);
+      len -= ntohs(c_hdr->packet_len);
+      i += 1;
    }
-
    //print_all_clients(server);
 
 }
 
 void flag_one (struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
    
-   struct client_ptr * temp;
    struct initialize_packet * init_packet = (struct initialize_packet *) buf;
    uint8_t sender_handle[100] = {0};   // max string length.
 
    memcpy( &sender_handle, &init_packet->sender_handle_len + 1, init_packet->sender_handle_len );
-   //printf("%s\n", sender_handle);
 
-   // Let's check to see if the handle has been used.
-   temp = server->clients;
-   while (temp != NULL) {
-      //printf("String 1: %s\nString 2: %s\n", sender_handle, temp->client_handle);
-      if (strcmp( (char *) &sender_handle, (char *) &temp->client_handle) == 0) {
-         bad_handle(server, client);
-         return;
-      }
-      temp = temp->next_client;
+   if (handle_exists(server, sender_handle) == 0) {
+      bad_handle(server, client);
+      return;
    }
    
    // I wanted to put this inside 'good_handle', but I was having trouble doing that..
@@ -245,9 +262,77 @@ void good_handle (struct server_info * server, struct client_ptr * client) {
    wrapped_send(client->client_socket, c_hdr, 3, 0);
 }
 
+void flag_five(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
+  
+   //struct chat_header * c_hdr = (struct chat_header *) buf;
+   uint16_t curr_pos = 3;
+   
+   uint8_t sender_handle[100] = {0};   // max string length.
+   uint8_t sender_len = buf[curr_pos]; // sender len after c_hdr;
+   uint8_t number_dest;
+
+   uint8_t dest_handle[100] = {0};
+   uint8_t dest_len;
+
+   curr_pos += 1;
+   
+   memcpy( &sender_handle, buf + curr_pos, sender_len );
+   curr_pos += sender_len;
+
+   number_dest = buf[curr_pos];
+   curr_pos += 1;
+   
+   while (number_dest > 0) {
+      
+      dest_len = buf[curr_pos];
+      curr_pos += 1;
+      
+      // Need to clear out dest handle buffer each time.
+      memset( &dest_handle, '\0', 100 );
+      memcpy( &dest_handle, buf + curr_pos, dest_len);
+      curr_pos += dest_len;
+
+      printf("\tNumber Dest: %d\n\t\tDest Len: %d\n\t\tDest Handle: %s\n", number_dest, dest_len, dest_handle); 
+
+      if ( handle_exists( server, dest_handle ) != 0) {
+         printf("Handle doesn't exist.\n");
+      } else {
+         printf("Handle EXISTS.\n");
+      }
+      
+
+      number_dest -= 1;
+   }
+   
+}
 
 
 
+
+/*
+ *
+ * From this point below, we have helper functions that are very specific
+ * to this project. Other helper functions are located in helper.c
+ *
+ */
+
+
+uint8_t handle_exists (struct server_info * server, uint8_t handle[]) {
+   
+   struct client_ptr * temp = server->clients;
+   
+   while (temp != NULL) {
+      
+      //printf("String 1: %s\nString 2: %s\n", handle, temp->client_handle);
+      
+      if (strcmp( (char *) handle, (char *) &temp->client_handle) == 0) {
+         return 0; // Handle matches.
+      }
+      temp = temp->next_client;
+   }
+   
+   return 1;  // Handle doesn't match.
+}
 
 void print_all_clients (struct server_info * server) {
 
