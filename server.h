@@ -43,12 +43,17 @@ void set_and_select_file_descriptors (struct server_info * server);
 void new_client_connected (struct server_info * server);
 void delete_client (struct server_info * server, struct client_ptr * client);
 void client_ready (struct server_info * server, struct client_ptr * client);
+void check_recv_len (struct server_info * server, struct client_ptr * client, uint32_t len);
 
 void flag_one (struct server_info * server, struct client_ptr * client, uint8_t buf[]);
 void bad_handle (struct server_info * server, struct client_ptr * client);
 void good_handle (struct server_info * server, struct client_ptr * client);
 
 void flag_five (struct server_info * server, struct client_ptr * client, uint8_t buf[]);
+void return_bad_handle (struct server_info * server, struct client_ptr * client, uint8_t dest_len, uint8_t dest_handle[]);
+void forward_message (struct server_info * server, uint8_t buf[], uint8_t dest_handle[]);
+uint32_t get_socket_of_handle (struct server_info * server, uint8_t dest_handle[]);
+
 
 uint8_t handle_exists (struct server_info * server, uint8_t handle[]);
 void print_all_clients(struct server_info * server);

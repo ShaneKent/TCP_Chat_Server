@@ -12,7 +12,8 @@
 #include "networks.h"
 #include "helper.h"
 
-#define MAXBUF 1400
+#define STDIO_MAX 1400
+#define MAXBUF 3257
 
 int main (int argc, char * argv[]) {
 
@@ -66,37 +67,10 @@ void run (char * handle, uint32_t socket_number) {
       } else if (FD_ISSET(client.server_socket, &client.rfds)) {
          
          message_ready(&client);
-
-      }
-      /*
-      set_and_select_file_descriptors(&rfds, fds, num_fds);
-      
-      if (FD_ISSET(STDIN_FILENO, &rfds)) {
-         
-         parse_stdin(buf, handle, socket_number);
-         
          printf("$: ");
          fflush(stdout);
 
-      } else if (FD_ISSET(socket_number, &rfds)) {
-         
-         int len;
-         struct sockaddr remote;
-         socklen_t rlen;
-
-         len = recvfrom(socket_number, buf, MAXBUF, 0, &remote, &rlen);
-                  
-         printf("message received, len: %d\n", len);
-         print_buffer(buf, len);
-
-         if (len == 0) {
-            close(socket_number);
-
-            printf("Server Terminated\n");
-            exit(EXIT_SUCCESS);
-         }
       }
-      */
    }
 
 }
@@ -166,32 +140,118 @@ void set_and_select_file_descriptors (struct client_info * client) {
 
 }
 
+// This function is VERY similar to client_ready in server.c
 void message_ready (struct client_info * client) {
    
-   uint32_t len;
    uint8_t buf[MAXBUF];
+   uint8_t * ptr;
+   struct chat_header * c_hdr;
+   uint32_t len = recv(client->server_socket, buf, MAXBUF, 0);
+   uint32_t temp;
 
-   len = recv(client->server_socket, buf, MAXBUF, 0);
+   check_recv_len(client->server_socket, len);
+   
+   ptr = (uint8_t *) buf;
 
+   while (len > 0) {
+
+      c_hdr = (struct chat_header *) ptr;
+
+      if (len < ntohs(c_hdr->packet_len)) {
+         temp = len;
+         len += recv(client->server_socket, ptr + temp, MAXBUF, 0);
+         check_recv_len(client->server_socket, len);
+      }
+
+      //print_buffer(ptr, ntohs(c_hdr->packet_len));
+
+      if (c_hdr->flag == 5) {
+         flag_5(ptr);
+      } else if (c_hdr->flag == 7) { 
+         //printf("Flag 7\n");
+         flag_7(ptr);
+      } else if (c_hdr->flag == 9) {
+         printf("Flag 9\n");
+      } else if (c_hdr->flag == 11) {
+         printf("Flag 11\n");
+      } else if (c_hdr->flag == 12) {
+         printf("Flag 12\n");
+      } else if (c_hdr->flag == 13) {
+         printf("Flag 13\n");
+      }
+
+      ptr += ntohs(c_hdr->packet_len);
+      len -= ntohs(c_hdr->packet_len);
+   }
+    
+}
+
+void check_recv_len(uint32_t socket, uint32_t len) {
+   
    if (len == -1) {
       perror("recv call");
       exit(EXIT_FAILURE);
    } else if (len == 0) {
-      close(client->server_socket);
+      // OOPS! Looks like you're out of luck, silly client...
+      close(socket);
 
-      printf("Server Terminated\n");
+      printf("\rServer Terminated\n");
       exit(EXIT_SUCCESS);
    }
+
+}
+
+void flag_5 (uint8_t packet[]) {
+
+   struct chat_header * c_hdr = (struct chat_header *) packet;
+   uint16_t curr_pos = 3;
+   uint8_t sender_handle[100] = {0};
+   uint8_t sender_len = packet[curr_pos];
+   uint8_t number_dest;
+   uint8_t dest_len;
+   uint8_t text[200] = {0};
+
+   //print_buffer(packet, ntohs(c_hdr->packet_len));
+
+   curr_pos += 1;
+
+   memcpy( &sender_handle, packet + curr_pos, sender_len );
+   curr_pos += sender_len;
    
-   printf("message received, len: %d\n", len);
-   print_buffer(buf, len);
-    
+   number_dest = packet[curr_pos];
+   curr_pos += 1;
+
+   while (number_dest > 0) {
+      dest_len = packet[curr_pos];
+      curr_pos += 1 + dest_len;
+
+      number_dest -= 1;
+   }
+
+   memcpy( &text, packet + curr_pos, 1 + ntohs(c_hdr->packet_len) - curr_pos);
+   printf("\n%s: %s\n", sender_handle, text);
+
+}
+
+void flag_7 (uint8_t packet[]) {
+   
+   struct chat_header * c_hdr = (struct chat_header *) packet;
+   uint16_t curr_pos = 3;
+
+   uint8_t dest_handle[100] = {0};
+   uint8_t dest_len = packet[curr_pos];
+   curr_pos += 1;
+
+   memcpy( &dest_handle, packet + curr_pos, dest_len );
+   
+   printf("\rClient with handle %s does not exist\n", dest_handle);
+
 }
 
 void parse_stdin(struct client_info * client) {
    
    char * tok;
-   uint8_t buf[MAXBUF];
+   uint8_t buf[STDIO_MAX];
 
    fgets( (char *) buf, MAXBUF, stdin);
 
@@ -261,13 +321,17 @@ void parse_m_command (struct client_info * client) { //char * handle, uint32_t s
 
          handle_len = pack_handle(packet, packet_len, tok);
          packet_len += 1 + handle_len;
+         
+         if (packet[packet_len - 1] == '\n')
+            packet_len -= 1;
       }
    }
    
-   tok = strtok(NULL, "\n");
+   tok = strtok(NULL, "");
    if (tok == NULL || tok == 0x00) {
       tok = "\n";
       pack_text_and_send(packet, packet_len, tok, client->server_socket);
+      return;
    }
 
    pack_text_and_send(packet, packet_len, tok, client->server_socket);
@@ -281,14 +345,12 @@ void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint3
    uint8_t packed_len;
    uint8_t text[200];
    uint8_t p;
-   
-   if (text_len % 200 == 0) num_packets -= 1;
 
-   //printf("num packets: %d\n", num_packets);
+   if (text_len % 200 == 0) num_packets -= 1;
 
    for (p = 0; p < num_packets; p++) {
       memset(text, 0, sizeof(uint8_t));
-      strncpy((char *) text, tok, 200);
+      strncpy((char *) text, tok, text_len);
 
       tok = tok + 200;
 
@@ -296,10 +358,8 @@ void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint3
       
       packet[0] = htons(packet_len + packed_len);
       packet[1] = htons(packet_len + packed_len) >> 8;
-      
+     
       wrapped_send(socket_number, packet, packet_len + packed_len, 0);
-   
-      //printf("p: %d, len: %d\n", p, packet_len + packed_len);
    }
 
 }

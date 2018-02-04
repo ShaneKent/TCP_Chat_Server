@@ -174,40 +174,26 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
    uint8_t * ptr;
    struct chat_header * c_hdr;
    uint32_t len = recv(client->client_socket, buf, MAXBUF, 0);
-   
-   if (len < 0) {
-      perror("recv call");
-      exit(EXIT_FAILURE);
-   } else if (len == 0) { // Time to close a client.
-      delete_client(server, client);
-      return;
-   }
+   uint32_t temp;
+
+   check_recv_len(server, client, len);
    
    ptr = (uint8_t *) buf;
 
-   int i = 0;
+   //int i = 0;
    while (len > 0) {
       
       c_hdr = (struct chat_header *) ptr;
-      printf("%d\n", i);
-      printf("c_hdr packet len: %d\n", ntohs(c_hdr->packet_len));
-      printf("len: %d\n", len);
 
       // This is the case where the length of the next packet is greater than the data currently received.
       if (len < ntohs(c_hdr->packet_len)) {
-         uint32_t temp = len;
+         temp = len;
          len += recv(client->client_socket, ptr + temp, MAXBUF, 0);
-
-         if (len < 0) {
-            perror("recv call"); exit(EXIT_FAILURE);
-         } else if (len == 0) { // Time to close a client.
-            delete_client(server, client); return;
-         }
-         printf("\t%d\n", i);
-         printf("\tc_hdr packet len: %d\n", ntohs(c_hdr->packet_len));
-         printf("\tlen: %d\n", len);
+         check_recv_len(server, client, len);
       }
-
+      
+      // May want to make this a switch statement. Upon some research...
+      // https://stackoverflow.com/questions/6805026/is-switch-faster-than-if
       if (c_hdr->flag == 1) {
          flag_one(server, client, ptr);
       } else if (c_hdr->flag == 5) {
@@ -216,9 +202,19 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
       
       ptr += ntohs(c_hdr->packet_len);
       len -= ntohs(c_hdr->packet_len);
-      i += 1;
    }
-   //print_all_clients(server);
+
+}
+
+void check_recv_len(struct server_info * server, struct client_ptr * client, uint32_t len) {
+   
+   if (len < 0) {
+      perror("recv call");
+      exit(EXIT_FAILURE);
+   } else if (len == 0) { // Time to close a client.
+      delete_client(server, client);
+      return;
+   }
 
 }
 
@@ -264,7 +260,7 @@ void good_handle (struct server_info * server, struct client_ptr * client) {
 
 void flag_five(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
   
-   //struct chat_header * c_hdr = (struct chat_header *) buf;
+   struct chat_header * c_hdr = (struct chat_header *) buf;
    uint16_t curr_pos = 3;
    
    uint8_t sender_handle[100] = {0};   // max string length.
@@ -292,21 +288,69 @@ void flag_five(struct server_info * server, struct client_ptr * client, uint8_t 
       memcpy( &dest_handle, buf + curr_pos, dest_len);
       curr_pos += dest_len;
 
-      printf("\tNumber Dest: %d\n\t\tDest Len: %d\n\t\tDest Handle: %s\n", number_dest, dest_len, dest_handle); 
+      //printf("\tNumber Dest: %d\n\t\tDest Len: %d\n\t\tDest Handle: %s\n", number_dest, dest_len, dest_handle); 
 
       if ( handle_exists( server, dest_handle ) != 0) {
-         printf("Handle doesn't exist.\n");
+         //printf("Handle doesn't exist.\n");
+         return_bad_handle( server, client, dest_len, dest_handle );
+
       } else {
-         printf("Handle EXISTS.\n");
+         //printf("Handle EXISTS.\n");
+         forward_message( server, buf, dest_handle );
       }
       
-
       number_dest -= 1;
    }
-   
+
 }
 
+void return_bad_handle (struct server_info * server, struct client_ptr * client, uint8_t dest_len, uint8_t dest_handle[]) {
+   
+   uint8_t packet[MAXBUF];
+   uint16_t pack_len = 4;
+   struct chat_header * c_hdr = (struct chat_header *) packet;
 
+   pack_len += pack_handle(packet, 3, (char *) dest_handle);
+   c_hdr->packet_len = htons(pack_len);
+   c_hdr->flag = 7;
+
+   //print_buffer(packet, pack_len);
+
+   wrapped_send(client->client_socket , packet, pack_len, 0);
+
+}
+
+void forward_message (struct server_info * server, uint8_t buf[], uint8_t dest_handle[]) {
+   
+   struct chat_header * c_hdr = (struct chat_header *) buf;
+   uint32_t dest_socket = get_socket_of_handle( server, dest_handle);
+
+   if (dest_socket == -1) {
+      perror("get_socket_of_handle call");
+      exit(EXIT_FAILURE);
+   }
+
+   //printf("Dest Handle: %s\n\tDest Socket: %d\n", dest_handle, dest_socket);
+   
+   wrapped_send(dest_socket, buf, ntohs(c_hdr->packet_len), 0);
+}
+
+uint32_t get_socket_of_handle (struct server_info * server, uint8_t dest_handle[]) {
+   
+   struct client_ptr * temp = server->clients;
+
+   while (temp != NULL) {
+      
+      if (strcmp( (char *) dest_handle, (char *) &temp->client_handle ) == 0) {
+         return temp->client_socket;
+      }
+
+      temp = temp->next_client;
+   }
+
+   return -1;
+
+}
 
 
 /*
@@ -315,8 +359,6 @@ void flag_five(struct server_info * server, struct client_ptr * client, uint8_t 
  * to this project. Other helper functions are located in helper.c
  *
  */
-
-
 uint8_t handle_exists (struct server_info * server, uint8_t handle[]) {
    
    struct client_ptr * temp = server->clients;

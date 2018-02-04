@@ -22,11 +22,14 @@ void initialize_packet(struct client_info * client);
 
 void set_and_select_file_descriptors(struct client_info * client);
 
-void message_ready (struct client_info * client);
+void message_ready(struct client_info * client);
+void check_recv_len(uint32_t socket, uint32_t len);
+
+void flag_5(uint8_t packet[]);
+void flag_7(uint8_t packet[]);
 
 void parse_stdin(struct client_info * client);
 void parse_m_command(struct client_info * client);
-//void parse_m_command(char * handle, uint32_t socket_number);
 void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint32_t socket_number);
 
 #endif
