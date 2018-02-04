@@ -200,6 +200,8 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
          flag_five(server, client, ptr);
       } else if (c_hdr->flag == 8) {
          flag_eight(server, client, ptr);
+      } else if (c_hdr->flag == 10) {
+         flag_ten(server, client, ptr);
       }
       
       ptr += ntohs(c_hdr->packet_len);
@@ -363,6 +365,68 @@ void flag_eight(struct server_info * server, struct client_ptr * client, uint8_t
 
 }
 
+void flag_ten(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
+
+   send_number_of_clients(server, client);
+   send_all_handles(server, client);
+   send_list_finished(server, client);
+
+}
+
+void send_number_of_clients(struct server_info * server, struct client_ptr * client) {
+   
+   uint8_t packet[MAXBUF];
+   uint16_t pack_len = 7;
+   struct chat_header * c_hdr = (struct chat_header *) packet;
+
+   //pack_len += pack_handle(packet, pack_len, (char *) htonl(server->number_clients));
+   packet[3] = htonl(server->number_clients);
+   packet[4] = htonl(server->number_clients) >> 8;
+   packet[5] = htonl(server->number_clients) >> 16;
+   packet[6] = htonl(server->number_clients) >> 24;
+   c_hdr->packet_len = htons(pack_len);
+   c_hdr->flag = 11;
+
+   //print_buffer(packet, pack_len);
+
+   wrapped_send(client->client_socket , packet, pack_len, 0);
+   
+}
+
+void send_all_handles(struct server_info * server, struct client_ptr * client) {
+   
+   struct client_ptr * temp = server->clients;
+
+   while (temp != NULL) {
+      uint8_t packet[MAXBUF];
+      uint16_t pack_len = 3;
+      struct chat_header * c_hdr = (struct chat_header *) packet;
+
+      pack_len += pack_handle(packet, pack_len, (char *) temp->client_handle);
+      c_hdr->packet_len = htons(pack_len + 1);
+      c_hdr->flag = 12;
+
+      //print_buffer(packet, pack_len + 1);
+
+      wrapped_send(client->client_socket, packet, pack_len + 1, 0);
+      temp = temp->next_client;
+   }
+}
+
+void send_list_finished(struct server_info * server, struct client_ptr * client) {
+   
+   uint8_t packet[MAXBUF];
+   uint16_t pack_len = 3;
+   struct chat_header * c_hdr = (struct chat_header *) packet;
+
+   c_hdr->packet_len = htons(pack_len);
+   c_hdr->flag = 13;
+
+   //print_buffer(packet, pack_len);
+
+   wrapped_send(client->client_socket , packet, pack_len, 0); 
+   
+}
 
 /*
  *

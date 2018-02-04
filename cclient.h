@@ -35,6 +35,8 @@ void check_recv_len(uint32_t socket, uint32_t len);
 void flag_5(uint8_t packet[]);
 void flag_7(uint8_t packet[]);
 void flag_9(struct client_info * client);
+void flag_11(uint8_t packet[]);
+void flag_12(uint8_t packet[]);
 
 void parse_stdin(struct client_info * client);
 void parse_m_command(struct client_info * client);
@@ -44,6 +46,8 @@ void list_blocked_clients(struct client_info * client);
 void block_client(struct client_info * client, char * tok);
 void unblock_client(struct client_info * client, char * tok);
 uint8_t check_if_blocked (struct client_info * client, char * handle);
+
+void ask_for_handles(struct client_info * client);
 
 void send_exit_request(struct client_info * client);
 

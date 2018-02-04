@@ -166,14 +166,13 @@ void message_ready (struct client_info * client) {
       } else if (c_hdr->flag == 7) { 
          flag_7(ptr);
       } else if (c_hdr->flag == 9) {
-         //printf("Flag 9\n");
          flag_9(client);
       } else if (c_hdr->flag == 11) {
-         printf("Flag 11\n");
+         flag_11(ptr);
       } else if (c_hdr->flag == 12) {
-         printf("Flag 12\n");
+         flag_12(ptr);
       } else if (c_hdr->flag == 13) {
-         printf("Flag 13\n");
+         //printf("Flag 13\n");
       }
 
       ptr += ntohs(c_hdr->packet_len);
@@ -264,6 +263,35 @@ void flag_9 (struct client_info * client) {
 
 }
 
+void flag_11 (uint8_t packet[]) {
+   
+   uint32_t number_handles;
+
+   //print_buffer(packet, 7);
+
+   number_handles = packet[3] + (packet[4] << 8) + (packet[5] << 16) + (packet[6] << 24);
+   number_handles = ntohl(number_handles);
+   printf("\rNumber of clients: %d\n", number_handles);
+
+}
+
+void flag_12 (uint8_t packet[]) {
+   
+   //struct chat_header * c_hdr = (struct chat_header *) packet;
+   uint16_t curr_pos = 3;
+
+   uint8_t handle[100] = {0};
+   uint8_t len = packet[curr_pos];
+   curr_pos += 1;
+
+   //print_buffer(packet, ntohs(c_hdr->packet_len));
+
+   memcpy( &handle, packet + curr_pos, len);
+   
+   printf("\r    %s\n", handle);
+
+}
+
 void parse_stdin(struct client_info * client) {
    
    char * tok;
@@ -285,8 +313,10 @@ void parse_stdin(struct client_info * client) {
       printf("Unblock failed, no handle provided.\n");
    } else if (strcmp(tok, "%U") == 0 || strcmp(tok, "%u") == 0) {
       unblock_client(client, tok);
+   } else if (strcmp(tok, "%L\n") == 0 || strcmp(tok, "%l\n") == 0) {
+      ask_for_handles(client);
    } else if (strcmp(tok, "%L") == 0 || strcmp(tok, "%l") == 0) {
-      printf("L command.\n");
+      ask_for_handles(client);
    } else if (strcmp(tok, "%E\n") == 0 || strcmp(tok, "%e\n") == 0) {
       send_exit_request(client); 
    } else if (strcmp(tok, "%E") == 0 || strcmp(tok, "%e") == 0) {
@@ -518,6 +548,23 @@ uint8_t check_if_blocked (struct client_info * client, char * handle) {
    }
    
    return 1;
+}
+
+void ask_for_handles(struct client_info * client) {
+
+   uint8_t len = 0;
+   uint16_t packet_len = 3;
+   uint8_t buf[MAXBUF];
+
+   len = pack_handle( buf, packet_len, (char *) client->handle );
+   packet_len += 1 + len;
+ 
+   buf[0] = htons(packet_len);
+   buf[1] = htons(packet_len) >> 8;
+   buf[2] = 10;
+
+   wrapped_send(client->server_socket, buf, packet_len, 0);
+
 }
 
 void send_exit_request(struct client_info * client) {

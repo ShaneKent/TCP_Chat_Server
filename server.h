@@ -56,6 +56,11 @@ uint32_t get_socket_of_handle (struct server_info * server, uint8_t dest_handle[
 
 void flag_eight(struct server_info * server, struct client_ptr * client, uint8_t buf[]);
 
+void flag_ten(struct server_info * server, struct client_ptr * client, uint8_t buf[]);
+void send_number_of_clients(struct server_info * server, struct client_ptr * client);
+void send_all_handles(struct server_info * server, struct client_ptr * client);
+void send_list_finished(struct server_info * server, struct client_ptr * client);
+
 uint8_t handle_exists (struct server_info * server, uint8_t handle[]);
 void print_all_clients(struct server_info * server);
 
