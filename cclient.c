@@ -48,20 +48,27 @@ void check_arguments(int argc, char * argv[]) {
 void run (char * handle, uint32_t socket_number) {
 
    struct client_info client;
-   client.server_socket = sociket_number;
+   client.server_socket = socket_number;
    strcpy( (char *) client.handle, handle);
    
-   /*fd_set rfds;
-   uint8_t buf[MAXBUF];
-  
-   uint32_t num_fds = 2;
-   uint32_t fds[2] = { STDIN_FILENO, socket_number };
-   initiate_good_bad_handle(buf, handle, socket_number);*/
-
    initiate_good_bad_handle(&client);
 
    while (1) {
 
+      set_and_select_file_descriptors(&client);
+
+      if (FD_ISSET(STDIN_FILENO, &client.rfds)) {
+            
+         parse_stdin(&client);
+         printf("$: ");
+         fflush(stdout);
+
+      } else if (FD_ISSET(client.server_socket, &client.rfds)) {
+         
+         message_ready(&client);
+
+      }
+      /*
       set_and_select_file_descriptors(&rfds, fds, num_fds);
       
       if (FD_ISSET(STDIN_FILENO, &rfds)) {
@@ -89,88 +96,99 @@ void run (char * handle, uint32_t socket_number) {
             exit(EXIT_SUCCESS);
          }
       }
+      */
    }
 
 }
-/*
-void initiate_good_bad_handle(uint8_t buf[], char * handle, uint32_t socket_number) {
+
+void initiate_good_bad_handle(struct client_info * client) {
    
    uint32_t len;
+   uint8_t buf[MAXBUF];
    struct chat_header * c_hdr;
 
-   initialize_packet(buf, handle, socket_number);
+   initialize_packet(client);
    
-   memset(buf, '\0', MAXBUF);
-   len = recv(socket_number, buf, MAXBUF, 0);
+   len = recv(client->server_socket, buf, MAXBUF, 0);
 
    if (len < 0) {
       perror("recv call");
       exit(EXIT_FAILURE);
    }
 
-   print_buffer(buf, len);
+   //print_buffer(buf, len);
    c_hdr = (struct chat_header *) buf;
 
-   //printf("packed len: %04x\n", ntohs(c_hdr->packet_len);
-   //printf("ntohs: %04x\n", ntohs(3));
-   //printf("htons: %04x\n", htons(3));
-   //printf("%04x\n", htons(c_hdr->packet_len));
-   
    if (c_hdr->flag == 3) {
-      printf("Handle already in use: %s\n", handle);
+      printf("Handle already in use: %s\n", client->handle);
       exit(EXIT_FAILURE);
    }
-   
+
    printf("$: ");
    fflush(stdout);
-}
-*/
-
-void initiate_good_bad_handle(struct client_info * client) {
 
 }
 
-void initialize_packet(uint8_t buf[], char * handle, uint32_t socket_number) {
+void initialize_packet(struct client_info * client) {
+
    uint8_t len = 0;
    uint16_t packet_len = 0;
+   uint8_t buf[MAXBUF];
 
-   memset(buf, 0, MAXBUF);
-  
-   len = pack_handle(buf, 3, handle);
-   
-   packet_len = 3 + 1 + len;              // First four bytes plus handle len.
-   
-   buf[0] = htons(packet_len) >> 8;
-   buf[1] = htons(packet_len);
+   len = pack_handle( buf, 3, (char *) client->handle );
+   packet_len = 3 + 1 + len;
+ 
+   //printf("%04x %04x\n", htons(packet_len), htons(3));
+   buf[0] = htons(packet_len);
+   buf[1] = htons(packet_len) >> 8;
    buf[2] = 1;
-   
+
    //print_buffer(buf, packet_len);
 
-   wrapped_send(socket_number, buf, packet_len, 0);
+   wrapped_send(client->server_socket, buf, packet_len, 0);
 }
 
-void set_and_select_file_descriptors (fd_set * rfds, uint32_t fds[], uint32_t num_fds) {
-   
-   int i;
+void set_and_select_file_descriptors (struct client_info * client) {
+
    int max_fd = 0;
    struct timeval tv;
 
-   tv.tv_sec = 1;
-   tv.tv_usec = 0;
-   FD_ZERO(rfds);
-   
-   for (i = 0; i < num_fds; i++) {
-      FD_SET(fds[i], rfds);
-      if (fds[i] > max_fd) {
-         max_fd = fds[i];
-      }
-   }
+   tv.tv_sec = 0;
+   tv.tv_usec = 500000;
+   FD_ZERO( &client->rfds );
+   FD_SET( STDIN_FILENO, &client->rfds );
+   FD_SET( client->server_socket, &client->rfds );
 
-   select(max_fd + 1, (fd_set *) rfds, (fd_set *) 0, (fd_set *) 0, &tv);   
+   if ( client->server_socket > max_fd )
+      max_fd = client->server_socket;
+   
+   select(max_fd + 1, (fd_set *) &client->rfds, (fd_set *) 0, (fd_set *) 0, &tv);
 
 }
 
-void parse_stdin(uint8_t buf[], char * handle, uint32_t socket_number) {
+void message_ready (struct client_info * client) {
+   
+   uint32_t len;
+   uint8_t buf[MAXBUF];
+
+   len = recv(client->server_socket, buf, MAXBUF, 0);
+
+   if (len == -1) {
+      perror("recv call");
+      exit(EXIT_FAILURE);
+   } else if (len == 0) {
+      close(client->server_socket);
+
+      printf("Server Terminated\n");
+      exit(EXIT_SUCCESS);
+   }
+   
+   printf("message received, len: %d\n", len);
+   print_buffer(buf, len);
+    
+}
+
+/*void parse_stdin(uint8_t buf[], char * handle, uint32_t socket_number) {
 
    char * tok;
 
@@ -182,6 +200,35 @@ void parse_stdin(uint8_t buf[], char * handle, uint32_t socket_number) {
       parse_m_command(handle, socket_number);
    } else if (strcmp(tok, "%B") == 0 || strcmp(tok, "%b") == 0) {
       printf("B command.\n");
+   } else if (strcmp(tok, "%U") == 0 || strcmp(tok, "%u") == 0) {
+      printf("U command.\n");
+   } else if (strcmp(tok, "%L") == 0 || strcmp(tok, "%l") == 0) {
+      printf("L command.\n");
+   } else if (strcmp(tok, "%E") == 0 || strcmp(tok, "%e") == 0) {
+      printf("E command.\n");
+   } else {
+      printf("Invalid command\n");
+   }
+
+
+}*/
+
+void parse_stdin(struct client_info * client) {
+   
+   char * tok;
+   uint8_t buf[MAXBUF];
+
+   fgets( (char *) buf, MAXBUF, stdin);
+
+   tok = strtok( (char *) buf, " ");
+   
+   if ( strcmp(tok, "%M") == 0 || strcmp(tok, "%m") == 0) {
+      //parse_m_command(handle, socket_number);
+      printf("M command.\n");
+   } else if (strcmp(tok, "%B\n") == 0 || strcmp(tok, "%b\n") == 0) {
+      printf("B list command.\n");
+   } else if (strcmp(tok, "%B") == 0 || strcmp(tok, "%b") == 0) {
+      printf("B with handle command.\n");
    } else if (strcmp(tok, "%U") == 0 || strcmp(tok, "%u") == 0) {
       printf("U command.\n");
    } else if (strcmp(tok, "%L") == 0 || strcmp(tok, "%l") == 0) {
@@ -243,9 +290,8 @@ void parse_m_command (char * handle, uint32_t socket_number) {
    }
    
    tok = strtok(NULL, "\n");
-   if (tok == '\0') {
-      printf("Provide proper text message.\n"); return;
-   }
+   if (tok == '\0')
+      pack_text_and_send(packet, packet_len, "\n", socket_number);
 
    pack_text_and_send(packet, packet_len, tok, socket_number);
    
