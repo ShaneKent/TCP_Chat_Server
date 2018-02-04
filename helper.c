@@ -73,6 +73,17 @@ uint8_t pack_handle(uint8_t buf[], uint16_t location, char * handle) {
    
 }
 
+uint8_t pack_text(uint8_t buf[], uint16_t location, char * text) {
+   uint8_t len = 0;
+
+   while (text[len] != '\0' && text[len] != '\n') {
+      buf[location + len] = text[len];
+      len += 1;
+   }
+  
+   return len;
+}
+
 uint16_t length_string(char * string) {
 
    uint16_t len = 0;

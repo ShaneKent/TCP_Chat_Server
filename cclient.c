@@ -418,8 +418,11 @@ void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint3
 
       tok = tok + length_to_pack;
 
-      packed_len = pack_handle(packet, packet_len, (char *) text);
-      
+      //packed_len = pack_handle(packet, packet_len, (char *) text);
+      packed_len = pack_text(packet, packet_len, (char *) text);
+
+      //printf("packed length: %d\n", packed_len);
+
       packet[0] = htons(packet_len + packed_len);
       packet[1] = htons(packet_len + packed_len) >> 8;
      
