@@ -11,8 +11,7 @@
 #include "networks.h"
 #include "helper.h"
 
-#define DEBUG_FLAG 1
-#define MAXBUF 32768
+#define MAXBUF 3527
 
 int main (int argc, char * argv[]) {
    
@@ -61,7 +60,8 @@ void run (uint32_t server_socket) {
       temp_client = server.clients;
 
       while (temp_client != NULL) {             // loop through clients.
-         client_ready(&server, temp_client);
+         if (FD_ISSET(temp_client->client_socket, &server.rfds))
+            client_ready(&server, temp_client);
          temp_client = temp_client->next_client;
       }
 
@@ -112,7 +112,7 @@ void new_client_connected (struct server_info * server) {
    } else {
       temp_client = server->clients;       
 
-      while (temp_client != NULL)   // get to the end of the client list
+      while (temp_client->next_client != NULL)   // get to the end of the client list
          temp_client = temp_client->next_client; 
 
       temp_client->next_client = new_client; // add new client
@@ -124,8 +124,72 @@ void new_client_connected (struct server_info * server) {
    return;
 }
 
+void delete_client(struct server_info * server, struct client_ptr * client) {
+   /*
+    * There are 2 cases we need to check for:
+    *  (1) Trying to remove the first node.
+    *  (2) Trying to remove some other node.
+    */
+
+   struct client_ptr * c = server->clients;
+   struct client_ptr * temp;
+
+   // First Case
+   if (c->client_socket == client->client_socket) { 
+      server->clients = c->next_client;
+      server->number_clients -= 1;
+
+      close(client->client_socket);
+      free(c);
+      
+      return;
+   }
+
+   // Second Case
+   while (c->next_client != NULL) {
+      
+      if (c->next_client->client_socket == client->client_socket) {
+         temp = c->next_client;
+         
+         c->next_client = c->next_client->next_client;
+         
+         server->number_clients -= 1;
+
+         close(client->client_socket);
+         free(temp);
+
+         return;
+      }
+
+      c = c->next_client;
+
+   }
+
+}
+
 void client_ready (struct server_info * server, struct client_ptr * client) {
-   printf("Client ready: %d\n", client->client_socket);
+   
+   uint8_t buf[MAXBUF];
+   struct chat_header * c_hdr;
+   uint32_t len = recv(client->client_socket, buf, MAXBUF, 0);
+   
+   if (len < 0) {
+      perror("recv call");
+      exit(EXIT_FAILURE);
+   } else if (len == 0) { // Time to close a client.
+      delete_client(server, client);
+      return;
+   }
+
+   print_buffer(buf, len);
+
+   c_hdr = (struct chat_header *) buf;
+   
+   if (c_hdr->flag == 1) {
+      printf("Flag 1\n");
+      
+   }
+
 }
 
 
