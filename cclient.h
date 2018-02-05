@@ -32,7 +32,7 @@ void set_and_select_file_descriptors(struct client_info * client);
 void message_ready(struct client_info * client);
 void check_recv_len(uint32_t socket, uint32_t len);
 
-void flag_5(uint8_t packet[]);
+void flag_5(struct client_info * client, uint8_t packet[]);
 void flag_7(uint8_t packet[]);
 void flag_9(struct client_info * client);
 void flag_11(uint8_t packet[]);

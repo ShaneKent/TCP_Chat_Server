@@ -13,7 +13,7 @@
 #include "helper.h"
 
 #define STDIO_MAX 1400
-#define MAXBUF 3257
+#define MAXBUF 6500
 
 int main (int argc, char * argv[]) {
 
@@ -113,8 +113,8 @@ void initialize_packet(struct client_info * client) {
    len = pack_handle( buf, packet_len, (char *) client->handle );
    packet_len += 1 + len;
  
-   buf[0] = htons(packet_len);
-   buf[1] = htons(packet_len) >> 8;
+   buf[0] = htons(packet_len) >> 8;
+   buf[1] = htons(packet_len);
    buf[2] = 1;
 
    wrapped_send(client->server_socket, buf, packet_len, 0);
@@ -155,14 +155,17 @@ void message_ready (struct client_info * client) {
 
       c_hdr = (struct chat_header *) ptr;
 
-      if (len < ntohs(c_hdr->packet_len)) {
+      uint16_t l = ntohs( (ptr[0] << 8) + ptr[1] );
+      if (len < l) {
          temp = len;
          len += recv(client->server_socket, ptr + temp, MAXBUF, 0);
          check_recv_len(client->server_socket, len);
       }
 
+      //print_buffer(ptr, l);
+
       if (c_hdr->flag == 5) {
-         flag_5(ptr);
+         flag_5(client, ptr);
       } else if (c_hdr->flag == 7) { 
          flag_7(ptr);
       } else if (c_hdr->flag == 9) {
@@ -175,8 +178,8 @@ void message_ready (struct client_info * client) {
          //printf("Flag 13\n");
       }
 
-      ptr += ntohs(c_hdr->packet_len);
-      len -= ntohs(c_hdr->packet_len);
+      ptr += l;//ntohs(c_hdr->packet_len);
+      len -= l;//ntohs(c_hdr->packet_len);
    }
     
 }
@@ -196,10 +199,11 @@ void check_recv_len(uint32_t socket, uint32_t len) {
 
 }
 
-void flag_5 (uint8_t packet[]) {
+void flag_5 (struct client_info * client, uint8_t packet[]) {
 
-   struct chat_header * c_hdr = (struct chat_header *) packet;
+   //struct chat_header * c_hdr = (struct chat_header *) packet;
    uint16_t curr_pos = 3;
+   uint16_t l;
    uint8_t sender_handle[100] = {0};
    uint8_t sender_len = packet[curr_pos];
    uint8_t number_dest;
@@ -222,14 +226,19 @@ void flag_5 (uint8_t packet[]) {
       number_dest -= 1;
    }
 
-   memcpy( &text, packet + curr_pos, ntohs(c_hdr->packet_len) - curr_pos);
+   if (check_if_blocked(client, (char *) sender_handle) == 0) {
+      printf("\r");
+      return;
+   }
+   
+   l = ntohs( (packet[0] << 8) + packet[1] );
+   memcpy( &text, packet + curr_pos, l - curr_pos); //ntohs(c_hdr->packet_len) - curr_pos);
    printf("\n%s: %s\n", sender_handle, text);
 
 }
 
 void flag_7 (uint8_t packet[]) {
    
-   //struct chat_header * c_hdr = (struct chat_header *) packet;
    uint16_t curr_pos = 3;
 
    uint8_t dest_handle[100] = {0};
@@ -267,9 +276,7 @@ void flag_11 (uint8_t packet[]) {
    
    uint32_t number_handles;
 
-   //print_buffer(packet, 7);
-
-   number_handles = packet[3] + (packet[4] << 8) + (packet[5] << 16) + (packet[6] << 24);
+   number_handles = (packet[3] << 24) + (packet[4] << 16) + (packet[5] << 8) + packet[6];
    number_handles = ntohl(number_handles);
    printf("\rNumber of clients: %d\n", number_handles);
 
@@ -277,14 +284,11 @@ void flag_11 (uint8_t packet[]) {
 
 void flag_12 (uint8_t packet[]) {
    
-   //struct chat_header * c_hdr = (struct chat_header *) packet;
    uint16_t curr_pos = 3;
 
    uint8_t handle[100] = {0};
    uint8_t len = packet[curr_pos];
    curr_pos += 1;
-
-   //print_buffer(packet, ntohs(c_hdr->packet_len));
 
    memcpy( &handle, packet + curr_pos, len);
    
@@ -297,7 +301,7 @@ void parse_stdin(struct client_info * client) {
    char * tok;
    uint8_t buf[STDIO_MAX];
 
-   fgets( (char *) buf, MAXBUF, stdin);
+   fgets( (char *) buf, STDIO_MAX, stdin);
 
    tok = strtok( (char *) buf, " ");
    
@@ -417,15 +421,13 @@ void pack_text_and_send(uint8_t packet[], uint16_t packet_len, char * tok, uint3
       strncpy((char *) text, tok, length_to_pack);
 
       tok = tok + length_to_pack;
-
-      //packed_len = pack_handle(packet, packet_len, (char *) text);
+      
       packed_len = pack_text(packet, packet_len, (char *) text);
+      if (packed_len > 200) packed_len = 200;
 
-      //printf("packed length: %d\n", packed_len);
+      packet[0] = htons(packet_len + packed_len) >> 8;
+      packet[1] = htons(packet_len + packed_len);
 
-      packet[0] = htons(packet_len + packed_len);
-      packet[1] = htons(packet_len + packed_len) >> 8;
-     
       wrapped_send(socket_number, packet, packet_len + packed_len, 0);
       
       text_len -= length_to_pack;
@@ -562,8 +564,8 @@ void ask_for_handles(struct client_info * client) {
    len = pack_handle( buf, packet_len, (char *) client->handle );
    packet_len += 1 + len;
  
-   buf[0] = htons(packet_len);
-   buf[1] = htons(packet_len) >> 8;
+   buf[0] = htons(packet_len) >> 8;
+   buf[1] = htons(packet_len);
    buf[2] = 10;
 
    wrapped_send(client->server_socket, buf, packet_len, 0);
@@ -579,8 +581,8 @@ void send_exit_request(struct client_info * client) {
    len = pack_handle( buf, packet_len, (char *) client->handle );
    packet_len += 1 + len;
  
-   buf[0] = htons(packet_len);
-   buf[1] = htons(packet_len) >> 8;
+   buf[0] = htons(packet_len) >> 8;
+   buf[1] = htons(packet_len);
    buf[2] = 8;
 
    wrapped_send(client->server_socket, buf, packet_len, 0);

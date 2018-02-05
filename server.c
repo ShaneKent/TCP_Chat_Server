@@ -12,7 +12,7 @@
 #include "networks.h"
 #include "helper.h"
 
-#define MAXBUF 3527
+#define MAXBUF 6500
 
 int main (int argc, char * argv[]) {
    
@@ -180,13 +180,13 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
    
    ptr = (uint8_t *) buf;
 
-   //int i = 0;
    while (len > 0) {
       
       c_hdr = (struct chat_header *) ptr;
 
       // This is the case where the length of the next packet is greater than the data currently received.
-      if (len < ntohs(c_hdr->packet_len)) {
+      uint16_t l = ntohs( (ptr[0] << 8) + ptr[1] );
+      if (len < l) { //c_hdr->packet_len)) {
          temp = len;
          len += recv(client->client_socket, ptr + temp, MAXBUF, 0);
          check_recv_len(server, client, len);
@@ -204,8 +204,8 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
          flag_ten(server, client, ptr);
       }
       
-      ptr += ntohs(c_hdr->packet_len);
-      len -= ntohs(c_hdr->packet_len);
+      ptr += l;//ntohs(c_hdr->packet_len);
+      len -= l;//ntohs(c_hdr->packet_len);
    }
 
 }
@@ -242,24 +242,26 @@ void flag_one (struct server_info * server, struct client_ptr * client, uint8_t 
 
 void bad_handle (struct server_info * server, struct client_ptr * client) {
    
-   struct chat_header c_hdr[3];
-   
-   c_hdr->packet_len = htons(3);
-   c_hdr->flag = 3;
+   uint8_t buf[3];
 
-   wrapped_send(client->client_socket, c_hdr, 3, 0);
+   buf[0] = htons(3) >> 8;
+   buf[1] = htons(3);
+   buf[2] = 3;
+
+   wrapped_send(client->client_socket, buf, 3, 0);
    
    delete_client(server, client);
 }
 
 void good_handle (struct server_info * server, struct client_ptr * client) {
    
-   struct chat_header c_hdr[3];
+   uint8_t buf[3];
+   
+   buf[0] = htons(3) >> 8;
+   buf[1] = htons(3);
+   buf[2] = 2;
 
-   c_hdr->packet_len = htons(3);
-   c_hdr->flag = 2;
-
-   wrapped_send(client->client_socket, c_hdr, 3, 0);
+   wrapped_send(client->client_socket, buf, 3, 0);
 }
 
 void flag_five(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
@@ -310,13 +312,12 @@ void return_bad_handle (struct server_info * server, struct client_ptr * client,
    
    uint8_t packet[MAXBUF];
    uint16_t pack_len = 4;
-   struct chat_header * c_hdr = (struct chat_header *) packet;
 
    pack_len += pack_handle(packet, 3, (char *) dest_handle);
-   c_hdr->packet_len = htons(pack_len);
-   c_hdr->flag = 7;
 
-   //print_buffer(packet, pack_len);
+   packet[0] = htons(pack_len) >> 8;
+   packet[1] = htons(pack_len);
+   packet[2] = 7;
 
    wrapped_send(client->client_socket , packet, pack_len, 0);
 
@@ -324,8 +325,9 @@ void return_bad_handle (struct server_info * server, struct client_ptr * client,
 
 void forward_message (struct server_info * server, uint8_t buf[], uint8_t dest_handle[]) {
    
-   struct chat_header * c_hdr = (struct chat_header *) buf;
+   //struct chat_header * c_hdr = (struct chat_header *) buf;
    uint32_t dest_socket = get_socket_of_handle( server, dest_handle);
+   uint16_t l = ntohs( (buf[0] << 8) + buf[1] );
 
    if (dest_socket == -1) {
       perror("get_socket_of_handle call");
@@ -334,7 +336,7 @@ void forward_message (struct server_info * server, uint8_t buf[], uint8_t dest_h
 
    //printf("Dest Handle: %s\n\tDest Socket: %d\n", dest_handle, dest_socket);
    
-   wrapped_send(dest_socket, buf, ntohs(c_hdr->packet_len), 0);
+   wrapped_send(dest_socket, buf, l, 0); //ntohs(c_hdr->packet_len), 0);
 }
 
 uint32_t get_socket_of_handle (struct server_info * server, uint8_t dest_handle[]) {
@@ -355,14 +357,14 @@ uint32_t get_socket_of_handle (struct server_info * server, uint8_t dest_handle[
 }
 
 void flag_eight(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
-   
-   struct chat_header c_hdr[3];
+  
+   uint8_t packet[3];
 
-   c_hdr->packet_len = htons(3);
-   c_hdr->flag = 9;
+   packet[0] = htons(3) >> 8;
+   packet[1] = htons(3);
+   packet[2] = 9;
 
-   wrapped_send(client->client_socket, c_hdr, 3, 0);
-
+   wrapped_send(client->client_socket, packet, 3, 0);
 }
 
 void flag_ten(struct server_info * server, struct client_ptr * client, uint8_t buf[]) {
@@ -377,17 +379,15 @@ void send_number_of_clients(struct server_info * server, struct client_ptr * cli
    
    uint8_t packet[MAXBUF];
    uint16_t pack_len = 7;
-   struct chat_header * c_hdr = (struct chat_header *) packet;
 
-   //pack_len += pack_handle(packet, pack_len, (char *) htonl(server->number_clients));
-   packet[3] = htonl(server->number_clients);
-   packet[4] = htonl(server->number_clients) >> 8;
-   packet[5] = htonl(server->number_clients) >> 16;
-   packet[6] = htonl(server->number_clients) >> 24;
-   c_hdr->packet_len = htons(pack_len);
-   c_hdr->flag = 11;
-
-   //print_buffer(packet, pack_len);
+   packet[3] = htonl(server->number_clients) >> 24;
+   packet[4] = htonl(server->number_clients) >> 16;
+   packet[5] = htonl(server->number_clients) >> 8;
+   packet[6] = htonl(server->number_clients);
+   
+   packet[0] = htons(pack_len) >> 8;
+   packet[1] = htons(pack_len);
+   packet[2] = 11;
 
    wrapped_send(client->client_socket , packet, pack_len, 0);
    
@@ -400,13 +400,11 @@ void send_all_handles(struct server_info * server, struct client_ptr * client) {
    while (temp != NULL) {
       uint8_t packet[MAXBUF];
       uint16_t pack_len = 3;
-      struct chat_header * c_hdr = (struct chat_header *) packet;
 
       pack_len += pack_handle(packet, pack_len, (char *) temp->client_handle);
-      c_hdr->packet_len = htons(pack_len + 1);
-      c_hdr->flag = 12;
-
-      //print_buffer(packet, pack_len + 1);
+      packet[0] = htons(pack_len + 1) >> 8;
+      packet[1] = htons(pack_len + 1);
+      packet[2] = 12;
 
       wrapped_send(client->client_socket, packet, pack_len + 1, 0);
       temp = temp->next_client;
@@ -417,12 +415,10 @@ void send_list_finished(struct server_info * server, struct client_ptr * client)
    
    uint8_t packet[MAXBUF];
    uint16_t pack_len = 3;
-   struct chat_header * c_hdr = (struct chat_header *) packet;
 
-   c_hdr->packet_len = htons(pack_len);
-   c_hdr->flag = 13;
-
-   //print_buffer(packet, pack_len);
+   packet[0] = htons(pack_len) >> 8;
+   packet[1] = htons(pack_len);
+   packet[2] = 13;
 
    wrapped_send(client->client_socket , packet, pack_len, 0); 
    
