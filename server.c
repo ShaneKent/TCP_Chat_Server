@@ -108,6 +108,8 @@ void new_client_connected (struct server_info * server) {
    *new_client->client_handle = '\0'; // initialize handle as NULL
    new_client->next_client = NULL;
    
+   //printf("New client.\n");
+
    if (server->clients == NULL) {
       server->clients = new_client; // no stored clients
    } else {
@@ -191,7 +193,9 @@ void client_ready (struct server_info * server, struct client_ptr * client) {
          len += recv(client->client_socket, ptr + temp, MAXBUF, 0);
          check_recv_len(server, client, len);
       }
-      
+
+      //print_buffer(ptr, l);
+
       // May want to make this a switch statement. Upon some research...
       // https://stackoverflow.com/questions/6805026/is-switch-faster-than-if
       if (c_hdr->flag == 1) {
