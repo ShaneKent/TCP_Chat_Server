@@ -72,7 +72,7 @@ void run (uint32_t server_socket) {
 void set_and_select_file_descriptors (struct server_info * server) {
    
    uint32_t max_fd;
-   struct timeval tv;
+   //struct timeval tv;
    struct client_ptr * current_client = server->clients;
    
    FD_ZERO(&server->rfds);
@@ -89,10 +89,10 @@ void set_and_select_file_descriptors (struct server_info * server) {
       current_client = current_client->next_client;
    }
    
-   tv.tv_sec = 0;
-   tv.tv_usec = 500000;
+   //tv.tv_sec = 0;
+   //tv.tv_usec = 500000;
 
-   select(max_fd + 1, (fd_set *) &server->rfds, (fd_set *) 0, (fd_set *) 0, &tv);
+   select(max_fd + 1, (fd_set *) &server->rfds, (fd_set *) 0, (fd_set *) 0, (struct timeval *) NULL);//&tv);
 
 }
 

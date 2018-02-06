@@ -123,10 +123,10 @@ void initialize_packet(struct client_info * client) {
 void set_and_select_file_descriptors (struct client_info * client) {
 
    int max_fd = 0;
-   struct timeval tv;
+   //struct timeval tv;
 
-   tv.tv_sec = 0;
-   tv.tv_usec = 500000;
+   //tv.tv_sec = 0;
+   //tv.tv_usec = 500000;
    FD_ZERO( &client->rfds );
    FD_SET( STDIN_FILENO, &client->rfds );
    FD_SET( client->server_socket, &client->rfds );
@@ -134,7 +134,7 @@ void set_and_select_file_descriptors (struct client_info * client) {
    if ( client->server_socket > max_fd )
       max_fd = client->server_socket;
    
-   select(max_fd + 1, (fd_set *) &client->rfds, (fd_set *) 0, (fd_set *) 0, &tv);
+   select(max_fd + 1, (fd_set *) &client->rfds, (fd_set *) 0, (fd_set *) 0, (struct timeval *) NULL);//&tv);
 
 }
 
